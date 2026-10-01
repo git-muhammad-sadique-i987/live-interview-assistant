@@ -1,8 +1,9 @@
 {
   "_readme": [
     "Copy this file to config.json and edit vault_path. That one line is the only thing you MUST change.",
-    "The API key does NOT live here -- it is read from the INTERVIEW_ASSISTANT_GEMINI_KEY environment variable.",
+    "The API key does NOT live here. Set the INTERVIEW_ASSISTANT_GEMINI_KEY environment variable (recommended):",
     "  setx INTERVIEW_ASSISTANT_GEMINI_KEY \"your-key-here\"   (then open a NEW terminal)",
+    "or add the key in the app under Settings > AI providers & API keys.",
     "Get a key at https://aistudio.google.com/apikey . Use a project of its OWN so this app's spend is visible and capped separately.",
     "Keys beginning with _ are ignored by the app, so you can leave notes to yourself here."
   ],

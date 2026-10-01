@@ -1,276 +1,265 @@
 # How to use Live Interview Assistant
 
-A grounded, self-hosted recall aid over **your own** Obsidian vault + resume. It listens to a
-question (spoken or typed), finds the relevant material **from your notes**, and shows a tight
-**first-person** answer you can narrate — with the source note named.
-
-**The one rule that makes this legitimate:** it answers *only* from your notes/resume. When nothing
-relevant is found, it gives an honest, professional *"I don't have direct hands-on experience with X"*
-instead of inventing anything. It is a memory jog for things you have actually done — not a fabrication
-engine.
-
-Files:
-- [interview_assistant.py](interview_assistant.py) — index builder, CLI, and the local web server.
-- [interview_overlay.html](interview_overlay.html) — the live voice overlay page.
+The [README](README.md) covers what the app is, how to install it and a walkthrough of a first
+interview. This guide is the practical companion: how to organise your notes so the answers are
+honest, how to set up your CV and the jobs you are applying for, how to get the sound right, how to
+tune it, and what to do when something goes wrong.
 
 ---
 
-## 1. One-time setup
+## 1. Organise your notes
 
-### a. Dependencies
-One command installs everything every feature uses:
-```
-pip install -r requirements.txt
-```
-Only `requests` is strictly required. If anything else is missing, the app still starts, and the
-console and the top of **Settings** name the features that are off and give the command above.
-`webrtcvad` is not in the file: it is optional and unused by default (the built-in energy-based
-silence detection is the default).
+### Tell the app how you know each folder
 
-### b. Give the app your Gemini key
-There are two ways, and you only need one.
+This is the most important setting after the folder itself. Every note gets a **tier** that says how
+you know its content, and the tier decides how an answer built on it may speak:
 
-**An environment variable (recommended).** Nothing is written to disk. Set it once:
-```
-setx INTERVIEW_ASSISTANT_GEMINI_KEY "your-key-here"
-```
-then open a **new** terminal (`setx` only affects shells started after it).
+| Tier | Use it for | How answers speak |
+|---|---|---|
+| `production` | Work you did in a real job | As your experience, with the **Production experience** badge |
+| `project` | Labs, side projects, proofs of concept | As your experience, with the **Project experience** badge, and "not in production" when asked |
+| `study` | Courses, certifications, books | As knowledge, never as hands-on work, with the **Conceptual** badge |
+| `reference` | Framework and reference material | As plain explanation, with the **Reference** badge |
 
-**In the app.** Start it and open **Settings → AI providers & API keys**. On a first run with no key
-the app opens that box for you. The key is checked before it is kept. Left as is, it lasts until the
-app stops. Tick **Remember on this machine** to keep it in `api_keys.json`.
+Map your folders in `config.json` under `interview.vault_tiers`:
 
-> [!WARNING]
-> `api_keys.json` holds the key as **plain text**. It is git-ignored, but anyone who can read files
-> on your computer can read it. The environment variable is the safer choice, and it wins when both
-> are set.
-
-A leftover `gemini.api_key` in `config.json` is ignored with a warning.
-
-Use a Google Cloud project of its **own** for this key, so this app's spend is visible and capped
-independently of anything else you run.
-
-### c. Point it at your vault
-Your vault is the folder that holds your notes: an Obsidian vault or any other folder of notes.
-
-> [!IMPORTANT]
-> Only Markdown files (`.md`) are read. PDFs, Word documents and other files in the folder are
-> skipped, so convert anything you want the app to know into Markdown first.
-
-Copy the documented template and edit one line:
-```
-copy config.example.json config.json
-```
 ```json
-"interview": {
-  "vault_path": "C:/Users/you/Documents/ObsidianVault",
-  "embed_model": "gemini-embedding-001",
-  "embed_dim": 768,
-  "answer_provider": "gemini",
-  "answer_model": "gemini-3.1-flash-lite",
-  "top_k": 6,
-  "min_score": 0.65,
-  "adjacent_margin": 0.08,
-  "jd_path": "job_description.md",
-  "stt_model": "gemini-3.1-flash-lite",
-  "stt_sample_rate": 16000,
-  "silence_threshold": 0.012,
-  "silence_hangover_ms": 1500,
-  "port": 8765
+"vault_tiers": {
+  "_default": "study",
+  "Work Notes": "production",
+  "Labs": "project",
+  "Courses": "study",
+  "Reference": "reference"
 }
 ```
-`vault_path` is the only value you must set; every other key has a working default and is documented
-inline in [config.example.json](config.example.json). Optional ones worth knowing: `adjacent_margin`
-(how far below `min_score` still gets a brief honest bridging answer instead of a flat refusal),
-`jd_path` (where the saved job description lives), and the `stt_*` / `silence_*` keys for interviewer
-transcription. `silence_threshold` is an RMS level that may need per-machine tuning depending on your
-system volume.
-- `vault_path` — your Obsidian vault folder (all `*.md` inside are indexed recursively; `.obsidian/`,
-  `.trash/`, and `templates/` are skipped).
-- `answer_model` / `stt_model` — **do not use the `gemini-2.5-*` family.** Google retired it for
-  projects created after mid-2026, and a retired model 404s every answer. `gemini-3.1-flash-lite` is
-  both the cheapest and the fastest tier measured; escalate to `gemini-3.5-flash` for a hard
-  question, not to a pro tier (pro costs ~5s to first token for no measured quality gain here).
-- `answer_provider` — **`gemini` is the default and the recommendation.** It reuses the one Gemini
-  key, needs no other account, and costs roughly **$0.001 per answer**. The alternative is
-  `openrouter` (uses the OpenRouter key/model) — capable but far pricier, and the thing that "burned $5
-  in seconds" before, so it stays off by default.
-  > Note: **Claude Pro is not the Claude API.** A Pro subscription does not grant API access; the
-  > Anthropic API is separate pay-as-you-go credits. Sonnet via API is ~10× the cost of Gemini Flash for
-  > this task, which is why Gemini is the default.
-- `min_score` — the grounding threshold (cosine similarity). Below it, the assistant gives the honest
-  "no experience" answer. Raise it to be stricter, lower it if it declines on topics you *have* noted.
 
-### Spend control
-There is no in-app budget anymore — no ledger, no pill, no hard-stop. Cap spend where it actually lives:
-set a **quota / budget alert on your key in Google Cloud**. Answers are ~$0.001 each, but an hour of leaving listening on is ~$0.23 - transcription, not answering, is the line item that matters. A small monthly
-cap there is plenty of headroom. (The `openrouter` provider stays off by default for the same
-runaway-cost reason it always has — see below.)
+- Keys are folder names, matched without regard to case, and the **deepest** matching folder wins.
+  So `Courses/Kubernetes Lab` can be `project` while the rest of `Courses` stays `study`.
+- `_default` applies to every note no folder rule covers. `study` is the safe choice: it can never
+  claim experience you do not have.
+- A single note can override its folder with a `tier:` line in its frontmatter:
 
-### d. Add your CV — in the app, not in config.json
-Open the **Profile** tab and import it. PDF, Word, Markdown and plain text all work; a PDF whose text
-was flattened to outlines (printed "as image") is read by sight instead, since there is no text layer
-to extract. The conversion is shown to you full-size for review and only becomes active when you save
-it — a bad conversion that reached the answer path would poison every answer.
+  ```markdown
+  ---
+  tier: production
+  ---
+  ```
 
-**The CV is injected verbatim into every answer, not indexed.** That is deliberate: there is no second
-copy to go stale, switching CVs is instant, and "tell me about yourself" always has it. It costs about
-$0.0005 per answer.
+> [!IMPORTANT]
+> Be honest with the map. If course material sits in a folder marked `production`, answers built on
+> it will be spoken as your own work. When a folder mixes the two, mark it at the lower tier and
+> raise the few notes that really are yours with a `tier:` line.
 
-The same pane manages **positions** — each one pairing a job description with a CV, so activating a
-position switches both at once and a JD from a previous interview cannot silently steer this one. The
-top of the pane always states what the next answer will actually use.
+Before rebuilding, check what each note will get:
 
-`interview.resume_path` in `config.json` is unused for answering; import the CV instead.
+```bash
+python interview_assistant.py --preview-tiers
+```
 
-Both embeddings **and** answers use the single **Gemini** key, so no other account is needed. (OpenRouter is only involved if you deliberately switch `answer_provider` to
-`openrouter`.)
+> [!TIP]
+> After editing the map, read the **TIER TOTALS** line in that output. The list of "files that
+> changed tier" only notices files that moved to another folder, not files whose folder rule changed.
+
+Changing the map costs nothing to apply: the next `--build-index` updates each note's tier without
+embedding anything again. Editing a note's frontmatter re-embeds only the one chunk that holds it.
+
+### Leave things out
+
+List folder or file names under `interview.vault_exclude` to keep them out of the index entirely, for
+example a journal, saved interview transcripts, or a folder of templates. Names match any part of a
+path, without regard to case. `.obsidian`, `.trash`, `.git` and `templates` are always skipped.
+
+### Optional: the reference notes
+
+The `reference-notes/` folder holds framework notes for lead-level questions: incident command,
+change management, severity and escalation, recovery objectives, architecture trade-offs, and a bank
+of scoping questions. Read [its guide](reference-notes/README-BEFORE-YOU-ADD-THESE.md) before copying
+any of them into your vault. Each already carries `tier: reference`.
 
 ---
 
-## 2. Build the index
-```
-python interview_assistant.py --build-index
-```
-This embeds every chunk of your vault and writes `interview_index.json` plus its `.vectors.npy` sidecar next to the script. Your CV is NOT indexed - it is injected verbatim at answer time.
-Re-run it after you add/edit notes — it only re-embeds what changed. Use `--rebuild` to force a full
-re-embed (e.g. after changing `embed_model` or `embed_dim`).
+## 2. Your CV and the jobs you apply for
+
+Everything here lives in the **Profile** tab.
+
+### Import your CV
+
+PDF, Word, Markdown and plain text all work. The converted text opens full size for you to check,
+with a toggle between the rendered view and the Markdown. Nothing becomes active until you press
+**Save**, because a bad conversion would affect every answer.
+
+- **A PDF with no real text inside** (for example one printed "as an image") is read by Gemini
+  instead, for about two cents.
+- **A conversion that comes out as one flat block of text** (two-column PDFs often do) can be fixed
+  with **Reformat**, which restores headings and bullet points without changing the facts.
+
+> [!NOTE]
+> Your CV is not indexed like your notes. The whole CV is sent with every answer, so it can never go
+> out of date and switching CVs takes effect at once. It costs about a twentieth of a cent per answer.
+
+### Add the positions you are applying for
+
+A position holds a label, the job title, the company, the job description and which CV to use.
+Pressing **Use** switches all of them at once, so a job description from yesterday's interview cannot
+quietly steer today's. The top of the pane always shows exactly what the next answer will use.
+
+The job description **steers emphasis only**. It decides which of your real experiences come first
+and flags questions outside the role. It never adds a fact that is not in your notes or CV.
+
+> [!TIP]
+> You can also paste a job description straight into the **JD** tab. It then overrides the active
+> position, and the Profile pane says so in amber until you switch positions again.
 
 ---
 
-## 3. Try it in the terminal (prep / sanity check)
-```
-python interview_assistant.py --ask "How do you troubleshoot OSPF neighbors stuck in EXSTART?"
-```
-You'll see whether it was **Grounded** (with the match score and sources) and the first-person answer.
-Ask about something you *haven't* documented to confirm it declines honestly.
+## 3. Get the sound right (Windows)
+
+Interviewer transcription records whatever is playing on your **default playback device** (WASAPI
+loopback), so the one rule that makes it work is:
+
+> **The call app's speaker = your Windows default output = the device the app records.**
+
+Both of these setups work:
+
+- **Speakers.** You hear the interviewer out loud and the app records the same sound. Your microphone
+  may pick it up too, but the call app's echo cancellation usually removes that. Keep the volume
+  moderate.
+- **Earbuds or headphones.** The app still records, because it follows whatever the default device
+  is, and nothing leaks back into your microphone. This is the cleanest option, as long as the call
+  app really sends the interviewer's voice to the earbuds.
+
+**To set it up:**
+
+1. **Windows:** Settings → System → Sound → Output, and pick the device you listen on.
+2. **Zoom:** Settings → Audio → Speaker, and pick the same device or "Same as System".
+   **Google Meet:** More options → Settings → Audio → Speakers, and pick the same device.
+3. **Press Start listening after** choosing the device. The app takes the default device at the
+   moment you start and shows its name. If you change device mid-session, stop and start again.
+
+**If the app hears nothing:** play any sound and confirm it comes out of the default device, then
+press Start listening again.
+
+**If one question gets split into two, or lines end too early:** raise **Interviewer pause (ms)** in
+Settings. 2000 to 2500 suits someone who pauses to think. The words still appear as they are spoken,
+so a longer pause costs you no speed.
+
+**If silence is treated as speech, or quiet speech is missed:** adjust `interview.silence_threshold`
+in `config.json`. Raise it if it triggers on silence, lower it if it misses quiet speech. It depends on
+your system volume.
+
+> [!NOTE]
+> Each transcript line can be edited (to fix a misheard word) and copied, and has its own **Answer
+> this** and **Scope it** buttons. The **🎤** button in the header is a different thing: it uses your
+> browser's speech recognition for **your own** voice, and does not work in Firefox.
 
 ---
 
-## 4. Run the live voice overlay
-```
-python interview_assistant.py --serve
-```
-Then open **http://localhost:8765** in Firefox, Edge, or Chrome:
-1. Type a question in the box (always works) and press Enter — the answer streams in, rendered as
-   **Markdown**.
-2. Optionally click **Start listening** for your *own* voice via the browser mic
-   (`webkitSpeechRecognition`). This is an optional extra; where the browser doesn't support it (e.g.
-   Firefox) you get a helpful message rather than a dead end, and the typed box still works.
-3. Press **Space** (when not typing in the box) to re-ask the last heard sentence.
+## 4. During the interview
 
-Each answer is tagged with its **mode** badge:
-- **Grounded** — top match ≥ `min_score`; answered from your notes, with the source note named.
-- **Adjacent** — the closest match sits within `adjacent_margin` below `min_score`; you get a brief,
-  honest *bridging* answer from your nearest real experience (sources still shown) instead of a flat
-  refusal.
-- **No match / ungrounded** — nothing close enough; the honest "no direct hands-on experience" response.
-  Its wording is varied every time so it never sounds canned.
+### The controls strip
 
-### The Job description panel
-Open the collapsible **Job description** panel and paste the JD you're interviewing for. It's saved to
-`job_description.md` (git-ignored) and applied automatically to every answer. It is **focus-steering
-only**: it shapes *which* of your real, note-backed experiences get emphasized and flags out-of-scope
-questions — it never licenses inventing anything. The grounding rule above is unchanged.
+The row under the header holds the settings you might change between questions: **Level** (Lead or
+Hands-On), **Detail** (To the point, Concise, Balanced), **Source** (Vault, Vault+AI, AI), **Role**
+and **Model**. The README explains each. A fourth detail level, **Deep**, is in Settings only.
 
-### Interviewer transcription (Windows)
-The overlay can transcribe the **interviewer's** voice, not just yours:
-1. With `soundcard` installed (Windows / WASAPI **loopback**), click **Start listening** for the
-   transcript.
-2. The server captures whatever plays through your speakers — the interviewer on the call (or your own
-   TTS while testing) — splits it on silence, and transcribes each utterance by sending the audio to the
-   same **Gemini** key (`gemini-3.1-flash-lite` transcribes audio natively; set via `interview.stt_model`).
-3. Lines appear in the left **Interviewer transcript** sidebar. Each is **editable** (fix a misheard
-   word), **copyable**, and has an **Answer this** button that runs it through the normal grounded
-   pipeline.
+### Follow-up questions
 
-This path is fully decoupled from typing — the typed box always works even if listening is off or
-unsupported. If `soundcard`/loopback isn't available, listening just reports an error and the server
-keeps running. A quick way to test it without a real call is to play your own text-to-speech and watch it
-transcribe.
+The app keeps the last few questions and answers of the conversation, so "walk me through the steps"
+is understood as a follow-up to what was just asked. It decides on its own whether a question is a
+follow-up or a new topic, and starts fresh on a new topic. A **Context** chip above the question box
+shows how many turns it is carrying. Press **New topic** to clear it yourself, or turn the feature off
+with **Conversational context** in Settings. Follow-ups change only what a question means, never
+where the facts come from.
 
-### Sound setup — so BOTH you and the app hear the interviewer
-The capture is a Windows **WASAPI loopback**, which records whatever is playing on your **current
-default playback device**. The single rule that makes everything work:
+### History
 
-> **Meet/Zoom "Speaker" = your Windows default output device = the device the app loops back.**
+The **History** tab keeps every question and answer in your browser, with its badge and time. Click
+one to open it again, or use **Copy Q** and **Copy A**. It lives only in that browser on that device.
 
-So the interviewer's audio must play through your Windows *default* output, and the app captures that
-same device. Two setups both work:
+### Asking again
 
-- **Speakers (what you use):** Set Windows default output to your speakers. You hear the interviewer out
-  loud and the app's loopback captures the same audio. *Trade-off:* your microphone can pick up the
-  speaker sound, so the interviewer may hear a faint echo of themselves — the call app's echo
-  cancellation usually removes it; keep the volume moderate to be safe.
-- **Earbuds / headphones (no echo):** The app **still** captures, because loopback follows whatever the
-  default device is — including earbuds. Nothing leaks back into your mic, so there's no echo. This is
-  the cleanest option *as long as the call app actually routes the interviewer's voice to the earbuds*
-  (some headsets/apps route call audio oddly — if the transcript goes quiet after plugging in earbuds,
-  it's a routing problem, not the app).
+Press **Space** (with nothing selected) to ask the last question again, or double-tap the answer on a
+phone. Useful when an answer comes back at the wrong level or length.
 
-**Set it up (Windows 10/11):**
-1. **Windows:** Settings → System → Sound → **Output** → pick the device you're listening on (speakers
-   or earbuds). Or click the volume icon in the tray and choose the output there.
-2. **Zoom:** Settings → Audio → **Speaker** → set to the same device, or **"Same as System."**
-   **Google Meet:** ⋮ → Settings → Audio → **Speakers** → pick the same device.
-3. **Click Start listening AFTER** you've selected/switched the output device — the app grabs the current
-   default device at the moment you start, and its name shows in the button tooltip/toast so you can
-   confirm it grabbed the right one. If you change devices mid-session, click Stop then Start again.
+### Settings at a glance
 
-**If the app hears nothing:** (a) play any sound and confirm it comes out of the *default* device;
-(b) re-click Start listening after switching devices; (c) if quiet speech is missed or silence is
-treated as speech, tune the **Interviewer pause (ms)** in Settings and `interview.silence_threshold`
-in `config.json` (raise the threshold if it triggers on silence, lower it if it misses quiet speech —
-it's relative to your system volume).
+| Setting | What it does |
+|---|---|
+| Show sources | Lists the notes each answer used |
+| Answer text size | Makes the answer larger or smaller on this device only |
+| Answer model | The model that writes answers (the same list as on the strip) |
+| AI providers & API keys | Keys for Gemini (required) and the optional providers |
+| Humanize | Slightly more natural spoken phrasing |
+| Conversational context | Follow-up awareness (see above) |
+| Opener line | A short line to start saying while the answer loads |
+| Scope cue | Marks questions worth scoping first with a purple ◆ |
+| Detail level, Level, Role, Answer source | The same as the strip, plus Deep |
+| Interviewer pause (ms) | How long a silence ends a spoken line |
 
-### Follow-up questions (conversational context)
-The overlay is **stateful within a session**, so a bare follow-up like *"walk me through the
-implementation steps"* is understood in the context of what was just asked instead of being treated as a
-brand-new question. It sends the last few Q&A turns with each question; the server rewrites the follow-up
-into a standalone search query (shown under the answer as *"↳ read as follow-up: …"*) so retrieval stays
-on topic, then answers with the conversation in mind. A **🔗 Context: N turns** chip appears above the
-composer; click **New topic** to clear it when a genuinely new subject starts, or turn the whole thing off
-with **Conversational context** in Settings. It's grounding-safe — continuity only; new facts still come
-from your notes.
-
-### Conversation history
-A right-hand **History** panel keeps your past Q&A in the browser (`localStorage`): question, mode badge,
-timestamp, and sources, with per-item copy, click to reopen, and clear-all.
+Hover over or tap the ⓘ next to a setting for the full explanation.
 
 ---
 
-## Two honest notes (please read)
+## 5. Tune it
 
-- **Privacy of audio.** Two paths send audio off your machine. The optional browser mic
-  (`webkitSpeechRecognition`, your own voice) sends microphone audio to the browser vendor's cloud in
-  Chrome/Edge. The interviewer-transcription path sends the captured speaker audio to **Gemini** (the
-  same key) for transcription. If either matters to you, use the typed box — it's fully offline-friendly
-  and always works; the `/ask` endpoint is engine-agnostic, so a local STT (e.g. Whisper) could replace
-  the cloud paths later.
-- **Live use in interviews is your call.** This tool is unambiguously useful for **preparation** and for
-  **on-the-job / client recall**. Using it live during a synchronous interview is a judgment call — some
-  interviewers would object to undisclosed real-time assistance. Because it only surfaces *your own*
-  documented experience and refuses to invent anything, it keeps you honest either way, but the decision
-  to use it live (and whether to disclose) is yours.
+| If | Then |
+|---|---|
+| It says "no direct experience" on something you **have** written about | Check that the note is in the vault and indexed, then lower `min_score` a little (default 0.65) |
+| It answers when your notes really do not cover the question | Raise `min_score` toward 0.70 or 0.72 |
+| Answers miss detail that sits in a second note | Raise `top_k` (default 6). Balanced and Deep already search more notes |
+| Your own note on a topic keeps losing narrowly to a course note | Raise `tier_ceiling_margin` slightly (0.02 worked on a large vault). It only lets a higher-tier note count when its title or headings name what was asked |
+| Answers are too long or too short | Change **Detail** on the strip. To the point is a single sentence |
+| Answers use exact commands when you wanted the approach | Switch **Level** to Lead |
+
+After changing `config.json`, restart the app.
 
 ---
 
-## Tuning
-- Answers feel off-topic or it declines too often → your notes may not cover it (good!), or lower
-  `min_score` / raise `top_k`.
-- It answers when it shouldn't → raise `min_score` (e.g. 0.70–0.72).
-- Answers too long/short → adjust the `max_tokens` default in the generation functions (`gemini_chat` /
-  `gemini_chat_stream`), or the length guidance in `SYSTEM_GROUNDED` inside
-  [interview_assistant.py](interview_assistant.py).
+## 6. When something goes wrong
 
-## Security / secrets reminder
-With the key in the `INTERVIEW_ASSISTANT_GEMINI_KEY` environment variable, no file in this folder
-holds a credential. If you ticked **Remember on this machine**, `api_keys.json` does, as plain text.
-What else is personal: `profiles.json` and `resumes/` (your CVs),
-`job_description.md`, `interview_index.json` (chunks of your notes verbatim), and the generated
-`ia-*.key` TLS material. The included [.gitignore](.gitignore) already excludes all of these — but
-double-check before your first commit, and rotate the key if it ever gets pushed.
+| What you see | What to do |
+|---|---|
+| "Setup needed: No config file" | `copy config.example.json config.json`, then set `vault_path` |
+| "No Gemini API key" | Set `INTERVIEW_ASSISTANT_GEMINI_KEY`, or add the key in Settings → AI providers & API keys |
+| "Your Google Cloud project has reached its monthly spending cap" | Raise the cap at <https://ai.studio/spend>, or wait for the new month |
+| "Your Anthropic usage limit is used up until ..." | Switch the model to a Gemini one, or raise the limit in the Anthropic console |
+| "No notes or CV yet" | Import your CV in the Profile tab, or build the index from Settings → Your notes |
+| A model answers with an error about being unavailable | Pick another model. Google has retired whole model families before, and the app falls back to a working default at the next start |
+| **Screen** finds nothing, or the wrong tab | Start the browser with `start-interview-chrome.bat` or `start-interview-firefox.bat`, use only one of them at a time, and keep the interview tab in front |
+| **Screen** finds no tabs although the browser is open | Another program may already hold port 9223, often a browser started earlier with debugging on. Close it, then start the browser again with the batch file |
+| Google refuses to sign you in to Firefox | Run `start-interview-firefox.bat login` once, sign in, close it, then start it normally |
+| The first build stopped part way | Run `--build-index` again. It resumes from the last checkpoint |
+| Settings says some features are off | `pip install -r requirements.txt`, then restart the app |
 
-**One app, one key, one project.** Sharing a key across projects makes spend impossible to attribute:
-a month of this app's cost here turned out to belong mostly to an unrelated pipeline on the same key.
-Give this app its own Google Cloud project and cap it there.
+---
+
+## 7. Costs and keeping them in check
+
+On the default model, a 45-minute interview with 40 answers and listening on costs about 15 cents. The
+one cost that grows while nobody is asking anything is **listening**: audio left playing with
+listening on is transcribed continuously, at about 12 cents an hour. The app stops listening on its
+own after 90 minutes, or after 10 minutes of silence, and the header shows a live cost meter.
+
+> [!TIP]
+> Give this app its own Google Cloud project and set a spending cap on it. Sharing one key between
+> several tools makes it impossible to tell which one spent the money, and a cap at the provider is
+> the one limit nothing can bypass.
+
+---
+
+## 8. Privacy and honest use
+
+**What leaves your computer:** for each answer, the question, the few matching note chunks, your CV
+and the job description go to the answer model you chose. While listening, the interviewer's audio
+goes to Gemini. The optional 🎤 for your own voice uses your browser vendor's speech service. Typing
+your questions avoids both audio paths.
+
+**Your personal files** are git-ignored, so they never end up in a commit: `config.json`,
+`api_keys.json` (if you chose to save a key), `profiles.json`, `resumes/`, `job_description.md`,
+`ui_settings.json`, the index files and the generated TLS keys. Check before your first commit
+anyway, and replace the key at once if it is ever exposed.
+
+**Honest use.** The app only surfaces your own experience and refuses to invent any, so it keeps you
+honest. It is clearly useful for preparation and for recalling your own work on the job. Interviews
+differ in what they allow, and where an interview's rules prohibit assistance, the tool does not
+exempt you from them. Whether to use it live, and whether to say so, is your decision.
