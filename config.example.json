@@ -1,0 +1,64 @@
+{
+  "_readme": [
+    "Copy this file to config.json and edit vault_path. That one line is the only thing you MUST change.",
+    "The API key does NOT live here -- it is read from the INTERVIEW_ASSISTANT_GEMINI_KEY environment variable.",
+    "  setx INTERVIEW_ASSISTANT_GEMINI_KEY \"your-key-here\"   (then open a NEW terminal)",
+    "Get a key at https://aistudio.google.com/apikey . Use a project of its OWN so this app's spend is visible and capped separately.",
+    "Keys beginning with _ are ignored by the app, so you can leave notes to yourself here."
+  ],
+  "gemini": {
+    "api_key_env": "INTERVIEW_ASSISTANT_GEMINI_KEY"
+  },
+  "interview": {
+    "_vault_path": "REQUIRED. The folder of .md notes to answer from -- an Obsidian vault or any tree of markdown. Forward slashes work on Windows.",
+    "vault_path": "C:/Users/you/Documents/My Vault",
+    "_models": "Defaults measured Aug 2026: flash-lite is both the cheapest and the fastest tier. Do NOT use the retired gemini-2.5-* family; it 404s on projects created after mid-2026.",
+    "embed_model": "gemini-embedding-001",
+    "embed_dim": 768,
+    "answer_provider": "gemini",
+    "answer_model": "gemini-3.1-flash-lite",
+    "stt_model": "gemini-3.1-flash-lite",
+    "_retrieval": "min_score is the grounding threshold: raise toward 0.72 to refuse more often, lower if it declines on topics you HAVE written up. adjacent_margin is the band just below it that gets an honest bridging answer instead of a flat refusal.",
+    "top_k": 6,
+    "min_score": 0.65,
+    "adjacent_margin": 0.08,
+    "_tiers": "How you actually know each folder's content, which caps how much experience an answer may claim. Keys are folder names (deepest match wins, case-insensitive); a note's own frontmatter 'tier:' overrides the map. Order: production > project > study > reference. Delete this whole block to turn tier gating off.",
+    "vault_tiers": {
+      "_default": "study",
+      "Work Notes": "production",
+      "Labs": "project",
+      "Reference": "reference"
+    },
+    "_vault_exclude": "Folder names dropped from the index entirely (any path segment, case-insensitive).",
+    "vault_exclude": [
+      "Templates",
+      "Interviews"
+    ],
+    "_tier_ceiling_margin": "0.0 = only the single best-matching note decides how much experience an answer may claim. Raise it slightly (0.02 worked on a 24k-chunk vault) if your own notes keep losing narrowly to course notes on the same topic: a higher-tier note scoring within this distance of the top then counts, but only if its title or headings name what was asked. Measure before raising it further.",
+    "tier_ceiling_margin": 0.0,
+    "_server": "port is the localhost port for --serve.",
+    "port": 8765,
+    "_index_path": "Optional. Give a config its own index file so switching this config to a different vault cannot overwrite the other vault's index -- the vector cache lives inside that file, so losing it means paying for a full re-embed. Default: interview_index.json",
+    "_listening": "Windows-only loopback capture (needs the 'soundcard' package). silence_threshold is an RMS level and may need tuning to your system volume. Set hangover LONG (2000-2500) so a thinking pause cannot split one question in two -- responsiveness comes from partial_tail_flush_ms, not from this.",
+    "silence_threshold": 0.012,
+    "silence_hangover_ms": 1500,
+    "partial_stt_interval_ms": 2500,
+    "partial_tail_flush_ms": 250,
+    "_stt_cost": "Transcription is the only cost that accrues while nobody is asking anything: audio left playing with listening on bills continuously. These two caps stop that. 0 disables either one.",
+    "stt_max_session_minutes": 90,
+    "stt_idle_stop_minutes": 10,
+    "_screen": "Reading a question off the page. Launch the browser with start-interview-chrome.bat or start-interview-firefox.bat -- both use port 9223. screen_url_hint only ever BREAKS TIES between visible tabs; a focused, visible tab always wins first.",
+    "screen_enabled": true,
+    "screen_cdp_url": "http://127.0.0.1:9223",
+    "screen_url_hint": [
+      "hackerrank.com",
+      "codility.com",
+      "coderpad.io"
+    ],
+    "screen_min_chars": 80,
+    "screen_max_chars": 20000,
+    "_jd": "Where the pasted job description is saved. It steers WHICH of your real experiences lead; it never licenses a fact that is not in your notes.",
+    "jd_path": "job_description.md",
+    "debug_timing": false
+  }
+}

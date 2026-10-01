@@ -1,0 +1,2 @@
+# Windows batch files need CRLF: cmd.exe can fail to find a label (goto :login) in an LF-only file.
+*.bat text eol=crlf

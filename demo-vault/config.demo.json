@@ -1,0 +1,41 @@
+{
+  "_readme": [
+    "Ready-to-run config for the bundled demo vault. Copy it to config.json in the app folder:",
+    "    copy demo-vault\\config.demo.json config.json",
+    "You still need the API key in the environment:",
+    "    setx INTERVIEW_ASSISTANT_GEMINI_KEY \"your-key-here\"   (then a NEW terminal)",
+    "When you move to your own notes, change vault_path and rewrite vault_tiers for your folders."
+  ],
+  "gemini": {
+    "api_key_env": "INTERVIEW_ASSISTANT_GEMINI_KEY"
+  },
+  "interview": {
+    "vault_path": "demo-vault",
+    "_index_path": "The demo owns its own index file, so trying the demo on an existing install cannot overwrite the index built from your real vault.",
+    "index_path": "demo-index.json",
+    "embed_model": "gemini-embedding-001",
+    "embed_dim": 768,
+    "answer_provider": "gemini",
+    "answer_model": "gemini-3.1-flash-lite",
+    "stt_model": "gemini-3.1-flash-lite",
+    "top_k": 6,
+    "min_score": 0.65,
+    "_adjacent_margin": "Tightened from the 0.08 default because this vault is small: with only ~100 chunks every unrelated question still scores around 0.60, so the default band swallowed them all and a true no-experience answer was unreachable. Use 0.08 on a real vault.",
+    "adjacent_margin": 0.03,
+    "_vault_tiers": "Folder -> how the author actually knows it. This is the demo's whole point.",
+    "vault_tiers": {
+      "_default": "study",
+      "Production": "production",
+      "Projects": "project",
+      "Study": "study",
+      "Reference": "reference"
+    },
+    "_vault_exclude": "Dropped from the index entirely. demo-cv.md is here because a CV must NEVER be indexed - it is injected verbatim at answer time, so an indexed second copy would go stale silently. README.md is the vault's own documentation, not anyone's experience.",
+    "vault_exclude": [
+      "README.md",
+      "demo-cv.md"
+    ],
+    "tier_ceiling_margin": 0.0,
+    "port": 8765
+  }
+}

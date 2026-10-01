@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "interview-assistant",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["interview_assistant.py", "--serve"],
+      "port": 8765
+    }
+  ]
+}

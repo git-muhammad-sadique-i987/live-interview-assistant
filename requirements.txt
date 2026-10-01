@@ -1,0 +1,19 @@
+# Live Interview Assistant: everything it uses, so every feature works.
+#
+#     pip install -r requirements.txt
+#
+# Every package below is needed by at least one feature. If one is missing, the app still starts,
+# names the features that are off (in the console and at the top of Settings), and tells you to
+# run the command above. Minimums are the versions it has been tested with, rounded down.
+
+requests>=2.31          # every API call
+numpy>=2.0              # fast search over your notes, and interviewer transcription
+SoundCard>=0.4.3        # interviewer transcription from your speakers (Windows loopback)
+websocket-client>=1.7   # reading the question off the screen (Chrome and Firefox)
+pillow>=10.0            # screenshot fallback when a screen cannot be read as text
+pynput>=1.7             # hotkeys that work while the app is hidden behind a shared screen
+pypdf>=4.0              # CV import from PDF
+python-docx>=1.1        # CV import from Word
+qrcode>=7.4             # QR code to pair your phone
+cryptography>=42.0      # HTTPS for the phone (install as an app, screen stays on)
+anthropic>=1.0          # answers from Claude models
